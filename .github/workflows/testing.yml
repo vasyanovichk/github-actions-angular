@@ -1,0 +1,12 @@
+name: Test Angular App
+on: push # при пуші в гілку
+jobs:
+  test: # назва джоби
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get repository code
+      - uses: actions/checkout@v6 # крок для копіювання репозиторію в робоче середовище
+      - name: Install Dependencies
+        run: npm ci # команда для встановлення залежностей, визначених у package-lock.json
+      - name: Run Tests
+        run: npm test # команда для запуску тестів, визначених у package.json
