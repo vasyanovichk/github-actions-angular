@@ -1,0 +1,104 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master, develop]
+#    paths-ignore:
+#      - '.github/workflows/*' # Ігнорувати зміни в файлах workflow
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone repository
+        uses: actions/checkout@v6 # Клонуємо репозиторій
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4 # Встановлюємо Node.js
+        with:
+          node-version: 22
+          cache: npm # Використовуємо кеш для npm, щоб зберегти час на встановлення залежностей
+
+      - name: Install dependencies
+        run: npm ci # Встановлюємо залежності із package-lock.json
+
+      - name: Run linter
+        run: npm run lint  # Запускаємо лінтер для перевірки коду
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    needs: [lint, test]
+#    continue-on-error: true # Продовжуємо навіть якщо лінтинг або тести не пройшли, щоб не блокувати деплой
+    strategy:
+        matrix:
+            node-version: [22] # Можна додати інші версії Node.js для тестування на різних середовищах
+            os: [ubuntu-latest] # Можна додати інші ОС для тестування на різних платформах
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+#        with:
+#          node-version: 22
+#          cache: npm
+
+      - name: Cache deps
+        uses: actions/cache@v4 # Кешуємо залежності для швидшого виконання
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      #          необов'язково, але може допомогти зберегти час, якщо залежності не змінилися
+      #          restore-keys: | # Відновлюємо кеш, якщо ключ не знайдено, щобзапобігти повторному встановленню всіх залежностей
+      #            ${{ runner.os }}-node-
+      #            ${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for GitHub Pages
+        run: npx ng build --configuration=github-pages
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/github-actions-angular/browser
+
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
